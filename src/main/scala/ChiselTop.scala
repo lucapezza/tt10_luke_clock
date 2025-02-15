@@ -1,7 +1,7 @@
 import chisel3._
 
 /**
- * Example design in Chisel.
+ * Example design in Chisel. Luke_1.
  * A redesign of the Tiny Tapeout example.
  */
 class ChiselTop() extends Module {
