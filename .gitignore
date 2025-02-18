@@ -11,5 +11,8 @@ test/results.xml
 test/gate_level_netlist.v
 
 .bsp
-.project
-.target
+src/ChiselTop.fir
+src/ChiselTop.anno.json
+src/ChiselTop.v
+/target
+/project
