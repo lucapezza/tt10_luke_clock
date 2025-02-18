@@ -16,3 +16,5 @@ src/ChiselTop.anno.json
 src/ChiselTop.v
 /target
 /project
+/fpga
+/polygons
