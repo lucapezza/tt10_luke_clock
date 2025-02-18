@@ -11,5 +11,5 @@ test/results.xml
 test/gate_level_netlist.v
 
 .bsp
-.project/target
+.project
 .target
