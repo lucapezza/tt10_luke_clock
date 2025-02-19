@@ -92,8 +92,12 @@ class ChiselTop() extends Module {
   Green := 0.U
   Blue := 0.U
 
-  //when(inDisplayArea) {
-  when(pixelX * pixelY  === ((pixelX-1.U) * (pixelY-1.U))){
+  val cntReg = RegInit(0.U(20.W))
+  cntReg := cntReg + 1.U
+
+
+//when(inDisplayArea) {
+  when(pixelX * pixelY  === cntReg){
     when(pixelX(0) === 0.U){
       when(pixelY(0) === 0.U) {
         //white
