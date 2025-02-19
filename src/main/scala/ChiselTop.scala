@@ -83,7 +83,7 @@ class ChiselTop() extends Module {
 
   val inDisplayArea = (CounterXReg < VGA_H_DISPLAY_SIZE.U) && (CounterYReg < VGA_V_DISPLAY_SIZE.U)
   val pixelX = CounterXReg
-  val pixelY = CounterYReg
+  val pixelY = CounterYReg(8,0)
 
   val Red = Wire(UInt(2.W))
   val Green = Wire(UInt(2.W))
@@ -92,12 +92,8 @@ class ChiselTop() extends Module {
   Green := 0.U
   Blue := 0.U
 
-  val cntReg = RegInit(0.U(20.W))
-  cntReg := cntReg + 1.U
-
-
 //when(inDisplayArea) {
-  when(pixelX * pixelY  === cntReg){
+  when(pixelX > 200.U && pixelX < 300.U && pixelY > 400.U && pixelY < 500.U ){
     when(pixelX(0) === 0.U){
       when(pixelY(0) === 0.U) {
         //white
