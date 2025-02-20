@@ -90,7 +90,7 @@ class ChiselTop() extends Module {
   // CLOCK
   ////////////////////////////////////
   // Generate 1CC pulse at 1 Hz
-  val INTERNAL_1S_DIVIDER = 25000000
+  val INTERNAL_1S_DIVIDER = 250000 //25000000
   val internal1sEn = WireDefault(false.B)
   val cntReg = RegInit(0.U(25.W))
   cntReg := cntReg + 1.U
@@ -130,7 +130,7 @@ class ChiselTop() extends Module {
             when(hourUniReg === 9.U && (hourDecReg === 0.U || hourDecReg === 1.U)) {
               hourUniReg := 0.U
               hourDecReg := hourDecReg + 1.U
-            }.elsewhen(hourUniReg === 4.U && hourDecReg === 2.U) {
+            }.elsewhen(hourUniReg === 3.U && hourDecReg === 2.U) {
               hourUniReg := 0.U
               hourDecReg := 0.U
             }
@@ -166,6 +166,11 @@ class ChiselTop() extends Module {
   val GE_B0_Y_MIN = 310
   val GE_B0_Y_MAX = 400
 
+  //val GE_VLINE_H_M_X = 205
+  //val GE_VLINE_M_S_X = 405
+  val GE_HLINE_H_M_S_Y = 405
+
+
   val inHourDecXArea = pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_DEC_X_MAX.U
   val inHourUniXArea = pixelX > GE_HOUR_UNI_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U
   val inMinuteDecXArea = pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_DEC_X_MAX.U
@@ -178,12 +183,112 @@ class ChiselTop() extends Module {
   val inB1YArea = pixelY > GE_B1_Y_MIN.U && pixelY < GE_B1_Y_MAX.U
   val inB0YArea = pixelY > GE_B0_Y_MIN.U && pixelY < GE_B0_Y_MAX.U
 
+  val inXEdge_R3 =
+    pixelX === (GE_HOUR_UNI_X_MIN + 1).U || pixelX === (GE_HOUR_UNI_X_MAX - 1).U ||
+    pixelX === (GE_MINUTE_UNI_X_MIN + 1).U || pixelX === (GE_MINUTE_UNI_X_MAX - 1).U ||
+    pixelX === (GE_SECOND_UNI_X_MIN + 1).U || pixelX === (GE_SECOND_UNI_X_MAX - 1).U
+
+  val inXEdge_R2 =
+    pixelX === (GE_MINUTE_DEC_X_MIN + 1).U || pixelX === (GE_MINUTE_DEC_X_MAX - 1).U ||
+    pixelX === (GE_SECOND_DEC_X_MIN + 1).U || pixelX === (GE_SECOND_DEC_X_MAX - 1).U ||
+    inXEdge_R3
+
+  val inXEdge_R1_R0 =
+    pixelX === (GE_HOUR_DEC_X_MIN + 1).U || pixelX === (GE_HOUR_DEC_X_MAX - 1).U ||
+    inXEdge_R2
+
+  val inEdgeV =
+    (inB3YArea && inXEdge_R3) ||
+    (inB2YArea && inXEdge_R2) ||
+    ((inB1YArea || inB0YArea) && inXEdge_R1_R0)
+
+  val inYEdge_C5 =
+    pixelY === (GE_B1_Y_MIN + 1).U || pixelY === (GE_B1_Y_MAX - 1).U ||
+    pixelY === (GE_B0_Y_MIN + 1).U || pixelY === (GE_B0_Y_MAX - 1).U
+
+  val inYEdge_C3_C1 =
+    pixelY === (GE_B2_Y_MIN + 1).U || pixelY === (GE_B2_Y_MAX - 1).U ||
+    inYEdge_C5
+
+  val inYEdge_C4_C2_C0 =
+    pixelY === (GE_B3_Y_MIN + 1).U || pixelY === (GE_B3_Y_MAX - 1).U ||
+    inYEdge_C3_C1
+
+  val inEdgeH =
+    (inHourDecXArea && inYEdge_C5) ||
+    ((inMinuteDecXArea || inSecondDecXArea) && inYEdge_C3_C1) ||
+    ((inHourUniXArea || inMinuteUniXArea || inSecondUniXArea) && inYEdge_C4_C2_C0)
+
+  //val inLine = ((pixelY > GE_B3_Y_MIN.U && pixelY < GE_B0_Y_MAX.U) && (pixelX === GE_VLINE_H_M_X.U || pixelX === GE_VLINE_M_S_X.U)) ||
+  //             pixelY===GE_HLINE_H_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
+
+  val inLine = pixelY === GE_HLINE_H_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
+
+
+  val GE_DOTS_X = 610
+
+  val GE_DOTS_1_Y_MIN = 10
+  val GE_DOTS_1_Y_MAX = 16
+  val GE_DOTS_2_Y_MIN = 20
+  val GE_DOTS_2_Y_MAX = 26
+  val GE_DOTS_3_Y_MIN = 30
+  val GE_DOTS_3_Y_MAX = 36
+  val GE_DOTS_4_Y_MIN = 40
+  val GE_DOTS_4_Y_MAX = 46
+  val GE_DOTS_5_Y_MIN = 50
+  val GE_DOTS_5_Y_MAX = 56
+  val GE_DOTS_6_Y_MIN = 60
+  val GE_DOTS_6_Y_MAX = 66
+  val GE_DOTS_7_Y_MIN = 70
+  val GE_DOTS_7_Y_MAX = 76
+  val GE_DOTS_8_Y_MIN = 80
+  val GE_DOTS_8_Y_MAX = 86
+
+  val GE_DOTS_9_Y_MIN = 110
+  val GE_DOTS_9_Y_MAX = 116
+  val GE_DOTS_10_Y_MIN = 120
+  val GE_DOTS_10_Y_MAX = 126
+  val GE_DOTS_11_Y_MIN = 130
+  val GE_DOTS_11_Y_MAX = 136
+  val GE_DOTS_12_Y_MIN = 140
+  val GE_DOTS_12_Y_MAX = 146
+
+  val GE_DOTS_13_Y_MIN = 210
+  val GE_DOTS_13_Y_MAX = 216
+  val GE_DOTS_14_Y_MIN = 220
+  val GE_DOTS_14_Y_MAX = 226
+
+  val GE_DOTS_15_Y_MIN = 310
+  val GE_DOTS_15_Y_MAX = 316
+
+  val inDots =
+    pixelX === GE_DOTS_X.U &&
+    (pixelY > GE_DOTS_1_Y_MIN.U && pixelY < GE_DOTS_1_Y_MAX.U ||
+    pixelY > GE_DOTS_2_Y_MIN.U && pixelY < GE_DOTS_2_Y_MAX.U ||
+    pixelY > GE_DOTS_3_Y_MIN.U && pixelY < GE_DOTS_3_Y_MAX.U ||
+    pixelY > GE_DOTS_4_Y_MIN.U && pixelY < GE_DOTS_4_Y_MAX.U ||
+    pixelY > GE_DOTS_5_Y_MIN.U && pixelY < GE_DOTS_5_Y_MAX.U ||
+    pixelY > GE_DOTS_6_Y_MIN.U && pixelY < GE_DOTS_6_Y_MAX.U ||
+    pixelY > GE_DOTS_7_Y_MIN.U && pixelY < GE_DOTS_7_Y_MAX.U ||
+    pixelY > GE_DOTS_8_Y_MIN.U && pixelY < GE_DOTS_8_Y_MAX.U ||
+    pixelY > GE_DOTS_9_Y_MIN.U && pixelY < GE_DOTS_9_Y_MAX.U ||
+    pixelY > GE_DOTS_10_Y_MIN.U && pixelY < GE_DOTS_10_Y_MAX.U ||
+    pixelY > GE_DOTS_11_Y_MIN.U && pixelY < GE_DOTS_11_Y_MAX.U ||
+    pixelY > GE_DOTS_12_Y_MIN.U && pixelY < GE_DOTS_12_Y_MAX.U ||
+    pixelY > GE_DOTS_13_Y_MIN.U && pixelY < GE_DOTS_13_Y_MAX.U ||
+    pixelY > GE_DOTS_14_Y_MIN.U && pixelY < GE_DOTS_14_Y_MAX.U ||
+    pixelY > GE_DOTS_15_Y_MIN.U && pixelY < GE_DOTS_15_Y_MAX.U)
+
   val Red = WireDefault(0.U(2.W))
   val Green = WireDefault(0.U(2.W))
   val Blue = WireDefault(0.U(2.W))
 
   when(inDisplayArea) {
-    when(
+    when(inEdgeV || inEdgeH || inLine || inDots){
+      Red := 3.U
+      Green := 3.U
+      Blue := 3.U
+    } .elsewhen(
       (hourDecReg(1) && inHourDecXArea && inB1YArea) ||
       (hourDecReg(0) && inHourDecXArea && inB0YArea) ||
       (hourUniReg(3) && inHourUniXArea && inB3YArea) ||
@@ -219,9 +324,9 @@ class ChiselTop() extends Module {
       Green := 0.U
       Blue := 3.U
     }.otherwise {
-      Red := 1.U
-      Green := 1.U
-      Blue := 1.U
+      Red := 0.U
+      Green := 0.U
+      Blue := 0.U
     }
   }.otherwise {
     //Out of displayed area --> black
