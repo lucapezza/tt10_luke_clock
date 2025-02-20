@@ -85,42 +85,146 @@ class ChiselTop() extends Module {
   val pixelX = CounterXReg
   val pixelY = CounterYReg(8,0)
 
-  val Red = Wire(UInt(2.W))
-  val Green = Wire(UInt(2.W))
-  val Blue = Wire(UInt(2.W))
-  Red := 0.U
-  Green := 0.U
-  Blue := 0.U
 
-//when(inDisplayArea) {
-  when(pixelX > 200.U && pixelX < 300.U && pixelY > 400.U && pixelY < 500.U ){
-    when(pixelX(0) === 0.U){
-      when(pixelY(0) === 0.U) {
-        //white
-        Red := 3.U
-        Green := 3.U
-        Blue := 3.U
-      }.otherwise {
-        //black
-        Red := 0.U
-        Green := 0.U
-        Blue := 0.U
-      }
-    }.otherwise {
-      when(pixelY(0) === 0.U) {
-        //black
-        Red := 0.U
-        Green := 0.U
-        Blue := 0.U
-      }.otherwise {
-        //white
-        Red := 3.U
-        Green := 3.U
-        Blue := 3.U
+  ////////////////////////////////////
+  // CLOCK
+  ////////////////////////////////////
+  // Generate 1CC pulse at 1 Hz
+  val INTERNAL_1S_DIVIDER = 25000000
+  val internal1sEn = WireDefault(false.B)
+  val cntReg = RegInit(0.U(25.W))
+  cntReg := cntReg + 1.U
+  when(cntReg === (INTERNAL_1S_DIVIDER - 1).U) {
+    cntReg := 0.U
+    internal1sEn := true.B
+  }
+
+  val external1sEn = WireDefault(false.B)
+
+  val hourDecReg = RegInit(0.U(2.W)) // 0 - 2
+  val hourUniReg = RegInit(0.U(4.W)) // 0 - 9
+
+  val minuteDecReg = RegInit(0.U(3.W)) // 0 - 5
+  val minuteUniReg = RegInit(0.U(4.W)) // 0 - 9
+
+  val secondDecReg = RegInit(0.U(3.W)) // 0 - 5
+  val secondUniReg = RegInit(0.U(4.W)) // 0 - 9
+
+  val final1sEn = WireDefault(false.B)
+  final1sEn := internal1sEn //TODO: MUX this
+
+  when(final1sEn) {
+    secondUniReg := secondUniReg + 1.U
+    when(secondUniReg === 9.U) {
+      secondUniReg := 0.U
+      secondDecReg := secondDecReg + 1.U
+      when(secondDecReg === 5.U) {
+        secondDecReg := 0.U
+        minuteUniReg := minuteUniReg + 1.U
+        when(minuteUniReg === 9.U) {
+          minuteUniReg := 0.U
+          minuteDecReg := minuteDecReg + 1.U
+          when(minuteDecReg === 5.U) {
+            minuteDecReg := 0.U
+            hourUniReg := hourUniReg + 1.U
+            when(hourUniReg === 9.U && (hourDecReg === 0.U || hourDecReg === 1.U)) {
+              hourUniReg := 0.U
+              hourDecReg := hourDecReg + 1.U
+            }.elsewhen(hourUniReg === 4.U && hourDecReg === 2.U) {
+              hourUniReg := 0.U
+              hourDecReg := 0.U
+            }
+          }
+        }
       }
     }
-  } .otherwise {
-    //black
+  }
+
+  ////////////////////////////////////
+  // GRAPHIC ENGINE
+  ////////////////////////////////////
+
+  val GE_HOUR_DEC_X_MIN = 10
+  val GE_HOUR_DEC_X_MAX = 100
+  val GE_HOUR_UNI_X_MIN = 110
+  val GE_HOUR_UNI_X_MAX = 200
+  val GE_MINUTE_DEC_X_MIN = 210
+  val GE_MINUTE_DEC_X_MAX = 300
+  val GE_MINUTE_UNI_X_MIN = 310
+  val GE_MINUTE_UNI_X_MAX = 400
+  val GE_SECOND_DEC_X_MIN = 410
+  val GE_SECOND_DEC_X_MAX = 500
+  val GE_SECOND_UNI_X_MIN = 510
+  val GE_SECOND_UNI_X_MAX = 600
+
+  val GE_B3_Y_MIN = 10
+  val GE_B3_Y_MAX = 100
+  val GE_B2_Y_MIN = 110
+  val GE_B2_Y_MAX = 200
+  val GE_B1_Y_MIN = 210
+  val GE_B1_Y_MAX = 300
+  val GE_B0_Y_MIN = 310
+  val GE_B0_Y_MAX = 400
+
+  val inHourDecXArea = pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_DEC_X_MAX.U
+  val inHourUniXArea = pixelX > GE_HOUR_UNI_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U
+  val inMinuteDecXArea = pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_DEC_X_MAX.U
+  val inMinuteUniXArea = pixelX > GE_MINUTE_UNI_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U
+  val inSecondDecXArea = pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_DEC_X_MAX.U
+  val inSecondUniXArea = pixelX > GE_SECOND_UNI_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U
+
+  val inB3YArea = pixelY > GE_B3_Y_MIN.U && pixelY < GE_B3_Y_MAX.U
+  val inB2YArea = pixelY > GE_B2_Y_MIN.U && pixelY < GE_B2_Y_MAX.U
+  val inB1YArea = pixelY > GE_B1_Y_MIN.U && pixelY < GE_B1_Y_MAX.U
+  val inB0YArea = pixelY > GE_B0_Y_MIN.U && pixelY < GE_B0_Y_MAX.U
+
+  val Red = WireDefault(0.U(2.W))
+  val Green = WireDefault(0.U(2.W))
+  val Blue = WireDefault(0.U(2.W))
+
+  when(inDisplayArea) {
+    when(
+      (hourDecReg(1) && inHourDecXArea && inB1YArea) ||
+      (hourDecReg(0) && inHourDecXArea && inB0YArea) ||
+      (hourUniReg(3) && inHourUniXArea && inB3YArea) ||
+      (hourUniReg(2) && inHourUniXArea && inB2YArea) ||
+      (hourUniReg(1) && inHourUniXArea && inB1YArea) ||
+      (hourUniReg(0) && inHourUniXArea && inB0YArea)
+    ) {
+      Red := 3.U
+      Green := 0.U
+      Blue := 0.U
+    } .elsewhen(
+      (minuteDecReg(2) && inMinuteDecXArea && inB2YArea) ||
+      (minuteDecReg(1) && inMinuteDecXArea && inB1YArea) ||
+      (minuteDecReg(0) && inMinuteDecXArea && inB0YArea) ||
+      (minuteUniReg(3) && inMinuteUniXArea && inB3YArea) ||
+      (minuteUniReg(2) && inMinuteUniXArea && inB2YArea) ||
+      (minuteUniReg(1) && inMinuteUniXArea && inB1YArea) ||
+      (minuteUniReg(0) && inMinuteUniXArea && inB0YArea)
+    ) {
+      Red := 0.U
+      Green := 3.U
+      Blue := 0.U
+    } .elsewhen(
+      (secondDecReg(2) && inSecondDecXArea && inB2YArea) ||
+      (secondDecReg(1) && inSecondDecXArea && inB1YArea) ||
+      (secondDecReg(0) && inSecondDecXArea && inB0YArea) ||
+      (secondUniReg(3) && inSecondUniXArea && inB3YArea) ||
+      (secondUniReg(2) && inSecondUniXArea && inB2YArea) ||
+      (secondUniReg(1) && inSecondUniXArea && inB1YArea) ||
+      (secondUniReg(0) && inSecondUniXArea && inB0YArea)
+    ) {
+      Red := 0.U
+      Green := 0.U
+      Blue := 3.U
+    }.otherwise {
+      Red := 1.U
+      Green := 1.U
+      Blue := 1.U
+    }
+  }.otherwise {
+    //Out of displayed area --> black
     Red := 0.U
     Green := 0.U
     Blue := 0.U
@@ -129,27 +233,10 @@ class ChiselTop() extends Module {
   RedOut := RegNext(Red)
   GreenOut := RegNext(Green)
   BlueOut := RegNext(Blue)
-}
 
 
+} //module
 
-
-
-
-
-
-  /*
-    // Blink with 1 Hz
-    val cntReg = RegInit(0.U(32.W))
-    val ledReg = RegInit(0.U(1.W))
-    cntReg := cntReg + 1.U
-    when (cntReg === 25000000.U) {
-      cntReg := 0.U
-      ledReg := ~ledReg
-    }
-    io.uo_out := ledReg ## add
-  }
-  */
 
 object ChiselTop extends App {
   emitVerilog(new ChiselTop(), Array("--target-dir", "src"))
