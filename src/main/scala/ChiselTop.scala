@@ -55,13 +55,13 @@ class ChiselTop() extends Module {
   //io.ui_in(7) // Clear seconds
 
   // Synchronizers
-  val tClkSelectInBounce = RegPipeline(VecInit(io.ui_in(0), io.ui_in(1)).asUInt, 3, 0.U(2.W))
-  val tClk1HzIn = RegPipeline(io.ui_in(2), 3, false.B)
-  val tClk32kHzIn = RegPipeline(io.ui_in(3), 3, false.B)
-  val plusInBounce = RegPipeline(io.ui_in(4), 3, false.B)
-  val minusInBounce = RegPipeline(io.ui_in(5), 3, false.B)
-  val hourMinuteSetSelInBounce = RegPipeline(io.ui_in(6), 3, false.B)
-  val secondsClearInBounce = RegPipeline(io.ui_in(7), 3, false.B)
+  val tClkSelectInBounce = RegPipeline(VecInit(io.ui_in(0), io.ui_in(1)).asUInt, 2, 0.U(2.W))
+  val tClk1HzIn = RegPipeline(io.ui_in(2), 2, false.B)
+  val tClk32kHzIn = RegPipeline(io.ui_in(3), 2, false.B)
+  val plusInBounce = RegPipeline(io.ui_in(4), 2, false.B)
+  val minusInBounce = RegPipeline(io.ui_in(5), 2, false.B)
+  val hourMinuteSetSelInBounce = RegPipeline(io.ui_in(6), 2, false.B)
+  val secondsClearInBounce = RegPipeline(io.ui_in(7), 2, false.B)
 
   // De-bouncers
   val CLOCK_FREQUENCY_HZ = 25000000 //25 MHz (for devouncing, still OK if 25.175)
@@ -123,6 +123,10 @@ class ChiselTop() extends Module {
   val pixelX = counterXReg
   val pixelY = counterYReg(8,0)
 
+  val vSyncReg = RegInit(false.B)
+  vSyncReg := vSync
+  val newFrame = vSync && (!vSyncReg)
+
 
   ////////////////////////////////////
   // CLOCK
@@ -130,6 +134,40 @@ class ChiselTop() extends Module {
   //val TClkSelectIn = RegPipeline(io.ui_in(1) ## io.ui_in(0), 3, false.B)
   //val TClk1HzIn = RegPipeline(io.ui_in(2), 3, false.B)
   //val TClk32kHzIn = RegPipeline(io.ui_in(3), 3, false.B)
+
+  //Generate control commands
+  val plusInReg = RegInit(false.B)
+  plusInReg := plusIn
+  val plusReqReg = RegInit(false.B)
+  val plus = WireDefault(false.B)
+  when(plusIn && (!plusInReg)) {
+    plusReqReg := true.B
+  }.elsewhen(plusReqReg && newFrame) {
+    plus := true.B
+    plusReqReg := false.B
+  }
+
+  val minusInReg = RegInit(false.B)
+  minusInReg := minusIn
+  val minusReqReg = RegInit(false.B)
+  val minus = WireDefault(false.B)
+  when(minusIn && (!minusInReg)) {
+    minusReqReg := true.B
+  }.elsewhen(minusReqReg && newFrame) {
+    minus := true.B
+    minusReqReg := false.B
+  }
+
+  val secondsClearInReg = RegInit(false.B)
+  secondsClearInReg := secondsClearIn
+  val secondsClearReqReg = RegInit(false.B)
+  val secondsClear = WireDefault(false.B)
+  when(secondsClearIn && (!secondsClearInReg)) {
+    secondsClearReqReg := true.B
+  }.elsewhen(secondsClearReqReg && newFrame) {
+    secondsClear := true.B
+    secondsClearReqReg := false.B
+  }
 
   // Generate 1CC pulse at 1 Hz based on selected source (tClkPulse)
   val tClk1HzInReg = RegInit(false.B)
@@ -159,7 +197,7 @@ class ChiselTop() extends Module {
     }
     is(1.U) {
       // 01: internal 25.175 MHz
-      when(cntReg >= (25175000 - 1).U) {
+      when(cntReg >= (25000 - 1).U) {//(25175000 - 1).U) {
         cntReg := 0.U
         tClkPulse25MHz175 := true.B
       }.otherwise {
@@ -186,6 +224,14 @@ class ChiselTop() extends Module {
     }
   }
 
+  val tClkReqReg = RegInit(false.B)
+  val tClk = WireDefault(false.B)
+  when(tClkPulse) {
+    tClkReqReg := true.B
+  } .elsewhen (tClkReqReg && newFrame){
+    tClk := true.B
+    tClkReqReg := false.B
+  }
 
   val hourDecReg = RegInit(0.U(2.W)) // 0 - 2
   val hourUniReg = RegInit(0.U(4.W)) // 0 - 9
@@ -196,8 +242,61 @@ class ChiselTop() extends Module {
   val secondDecReg = RegInit(0.U(3.W)) // 0 - 5
   val secondUniReg = RegInit(0.U(4.W)) // 0 - 9
 
+  when(secondsClear){
+    // set seconds
+    secondUniReg := 0.U
+    secondDecReg := 0.U
+  }.elsewhen(plus){
+    when(hourMinuteSetSelIn){
+      //set hours
+      hourUniReg := hourUniReg + 1.U
+      when(hourUniReg === 9.U && (hourDecReg === 0.U || hourDecReg === 1.U)) {
+        hourUniReg := 0.U
+        hourDecReg := hourDecReg + 1.U
+      }.elsewhen(hourUniReg === 3.U && hourDecReg === 2.U) {
+        hourUniReg := 3.U
+        hourDecReg := 2.U
+      }
+    }.otherwise{
+      //set minutes
+      minuteUniReg := minuteUniReg + 1.U
+      when(minuteUniReg === 9.U && minuteDecReg =/= 5.U) {
+        minuteUniReg := 0.U
+        minuteDecReg := minuteDecReg + 1.U
+      }.elsewhen(minuteUniReg === 9.U && minuteDecReg === 5.U) {
+        minuteUniReg := 9.U
+        minuteDecReg := 5.U
+      }
+    }
 
-  when(tClkPulse) {
+  }.elsewhen(minus){
+    when(hourMinuteSetSelIn) {
+      //set hours
+      when(hourUniReg === 0.U && hourDecReg === 0.U) {
+        hourUniReg := 0.U
+        hourDecReg := 0.U
+      } .otherwise {
+        hourUniReg := hourUniReg - 1.U
+        when(hourUniReg === 0.U) {
+          hourUniReg := 9.U
+          hourDecReg := hourDecReg - 1.U
+        }
+      }
+
+    }.otherwise {
+      //set minutes
+      when(minuteUniReg === 0.U && minuteDecReg === 0.U) {
+        minuteUniReg := 0.U
+        minuteDecReg := 0.U
+      }.otherwise {
+        minuteUniReg := minuteUniReg - 1.U
+        when(minuteUniReg === 0.U) {
+          minuteUniReg := 9.U
+          minuteDecReg := minuteDecReg - 1.U
+        }
+      }
+    }
+  }.elsewhen(tClk) {
     secondUniReg := secondUniReg + 1.U
     when(secondUniReg === 9.U) {
       secondUniReg := 0.U

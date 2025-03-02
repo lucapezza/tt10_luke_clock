@@ -1,7 +1,6 @@
 import chisel3._
 import chisel3.util._
 
-
 object RegPipeline {
   /** Returns a pipeline of registers of the input type connected to the signal `input` and with no reset value. */
   def apply[T <: Data](input: T, pipeDepth: Int): T = {
