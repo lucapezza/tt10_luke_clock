@@ -1,9 +1,6 @@
 import chisel3._
+import chisel3.util._
 
-/**
- * Example design in Chisel. Luke_1.
- * A redesign of the Tiny Tapeout example.
- */
 class ChiselTop() extends Module {
   val io = IO(new Bundle {
     val ui_in = Input(UInt(8.W))      // Dedicated inputs
@@ -18,11 +15,11 @@ class ChiselTop() extends Module {
   // use bi-directionals as input
   io.uio_oe := 0.U
 
-  val RedOut = Wire(UInt(2.W))
-  val GreenOut = Wire(UInt(2.W))
-  val BlueOut = Wire(UInt(2.W))
-  val VsyncOut = Wire(Bool())
-  val HsyncOut = Wire(Bool())
+  val redOut = WireDefault(0.U(2.W))
+  val greenOut = WireDefault(0.U(2.W))
+  val blueOut = WireDefault(0.U(2.W))
+  val vSyncOut = WireDefault(false.B)
+  val hSyncOut = WireDefault(false.B)
 
   //Mapping of renamed output
   //uo_out[0] - R1
@@ -42,7 +39,49 @@ class ChiselTop() extends Module {
   //io.uo_out(6) := BlueOut(0) //- B0
   //io.uo_out(7) := HsyncOut //- hsync
 
-  io.uo_out := HsyncOut ## BlueOut(0) ## GreenOut(0) ## RedOut(0) ## VsyncOut ## BlueOut(1) ## GreenOut(1) ## RedOut(1) //- R0
+  io.uo_out := hSyncOut ## blueOut(0) ## greenOut(0) ## redOut(0) ## vSyncOut ## blueOut(1) ## greenOut(1) ## redOut(1) //- R0
+
+  // Inputs definitiona
+  //io.ui_in(1) ## io.ui_in(0) // Select of the time clock source (switches)
+                               // 00: internal 25MHz
+                               // 01: internal 25.175 MHz
+                               // 10: external 32768Hz
+                               // 11: external 1 Hz
+  //io.ui_in(2) // Input with 1Hz frequency
+  //io.ui_in(3) // Input with 32768Hz frequency
+  //io.ui_in(4) // Increase hours (button)
+  //io.ui_in(5) // Decrease hours (button)
+  //io.ui_in(6) // Select to increase hours (1) or minutes (0) (switch)
+  //io.ui_in(7) // Clear seconds
+
+  // Synchronizers
+  val tClkSelectInBounce = RegPipeline(VecInit(io.ui_in(0), io.ui_in(1)).asUInt, 3, 0.U(2.W))
+  val tClk1HzIn = RegPipeline(io.ui_in(2), 3, false.B)
+  val tClk32kHzIn = RegPipeline(io.ui_in(3), 3, false.B)
+  val plusInBounce = RegPipeline(io.ui_in(4), 3, false.B)
+  val minusInBounce = RegPipeline(io.ui_in(5), 3, false.B)
+  val hourMinuteSetSelInBounce = RegPipeline(io.ui_in(6), 3, false.B)
+  val secondsClearInBounce = RegPipeline(io.ui_in(7), 3, false.B)
+
+  // De-bouncers
+  val CLOCK_FREQUENCY_HZ = 25000000 //25 MHz (for devouncing, still OK if 25.175)
+  val DEBOUNCE_PERIOD_US = 22000 //22 ms
+  val DEBOUNCE_COUNTER_MAX = CLOCK_FREQUENCY_HZ / 1000000 * DEBOUNCE_PERIOD_US
+  val debounceCounter = RegInit(0.U(log2Up(DEBOUNCE_COUNTER_MAX).W))
+  val debounceSampleEn = WireDefault(false.B)
+  when(debounceCounter === (DEBOUNCE_COUNTER_MAX - 1).U) {
+    debounceCounter := 0.U
+    debounceSampleEn := true.B
+  }.otherwise {
+    debounceCounter := debounceCounter + 1.U
+    debounceSampleEn := false.B
+  }
+
+  val tClkSelectIn = RegEnable(tClkSelectInBounce, 0.U(2.W), debounceSampleEn)
+  val plusIn = RegEnable(plusInBounce, false.B, debounceSampleEn)
+  val minusIn = RegEnable(minusInBounce, false.B, debounceSampleEn)
+  val hourMinuteSetSelIn = RegEnable(hourMinuteSetSelInBounce, false.B, debounceSampleEn)
+  val secondsClearIn = RegEnable(secondsClearInBounce, false.B, debounceSampleEn)
 
   ////////////////////////////////////
   //VGA CONTROLLER
@@ -58,48 +97,95 @@ class ChiselTop() extends Module {
   val VGA_V_SYNC_PULSE_SIZE = 2
   val VGA_V_BACK_PORCH_SIZE = 33
 
-  val CounterXReg = RegInit(0.U(10.W))
-  val CounterYReg = RegInit(0.U(10.W))
+  val counterXReg = RegInit(0.U(10.W))
+  val counterYReg = RegInit(0.U(10.W))
 
-  val run = Wire(Bool())
-  run := true.B
+  val run = WireDefault(true.B)
   when(run) {
-      when(CounterXReg === (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE + VGA_H_SYNC_PULSE_SIZE + VGA_H_BACK_PORCH_SIZE - 1).U) { // CounterXMax = 800.U // 640 + 16 +  96 + 48
-        CounterXReg := 0.U
-        when(CounterYReg === (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE + VGA_V_SYNC_PULSE_SIZE + VGA_V_BACK_PORCH_SIZE - 1).U) { // CounterYMax = 525.U // 480 + 10 + 2 + 33
-          CounterYReg := 0.U
+      when(counterXReg === (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE + VGA_H_SYNC_PULSE_SIZE + VGA_H_BACK_PORCH_SIZE - 1).U) { // CounterXMax = 800.U // 640 + 16 +  96 + 48
+        counterXReg := 0.U
+        when(counterYReg === (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE + VGA_V_SYNC_PULSE_SIZE + VGA_V_BACK_PORCH_SIZE - 1).U) { // CounterYMax = 525.U // 480 + 10 + 2 + 33
+          counterYReg := 0.U
         }.otherwise {
-          CounterYReg := CounterYReg + 1.U
+          counterYReg := counterYReg + 1.U
         }
       }.otherwise {
-        CounterXReg := CounterXReg + 1.U
+        counterXReg := counterXReg + 1.U
       }
   }
 
-  val Hsync = (CounterXReg >= (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE).U && (CounterXReg < (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE + VGA_H_SYNC_PULSE_SIZE).U)) // active for 96 cycles of the CounterX
-  val Vsync = (CounterYReg >= (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE).U && (CounterYReg < (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE + VGA_V_SYNC_PULSE_SIZE).U)) // active for 2 cycles of the CounterY
-  HsyncOut := RegNext(Hsync)
-  VsyncOut := RegNext(Vsync)
+  val hSync = (counterXReg >= (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE).U && (counterXReg < (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE + VGA_H_SYNC_PULSE_SIZE).U)) // active for 96 cycles of the CounterX
+  val vSync = (counterYReg >= (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE).U && (counterYReg < (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE + VGA_V_SYNC_PULSE_SIZE).U)) // active for 2 cycles of the CounterY
+  hSyncOut := RegNext(hSync)
+  vSyncOut := RegNext(vSync)
 
-  val inDisplayArea = (CounterXReg < VGA_H_DISPLAY_SIZE.U) && (CounterYReg < VGA_V_DISPLAY_SIZE.U)
-  val pixelX = CounterXReg
-  val pixelY = CounterYReg(8,0)
+  val inDisplayArea = (counterXReg < VGA_H_DISPLAY_SIZE.U) && (counterYReg < VGA_V_DISPLAY_SIZE.U)
+  val pixelX = counterXReg
+  val pixelY = counterYReg(8,0)
 
 
   ////////////////////////////////////
   // CLOCK
   ////////////////////////////////////
-  // Generate 1CC pulse at 1 Hz
-  val INTERNAL_1S_DIVIDER = 250000 //25000000
-  val internal1sEn = WireDefault(false.B)
+  //val TClkSelectIn = RegPipeline(io.ui_in(1) ## io.ui_in(0), 3, false.B)
+  //val TClk1HzIn = RegPipeline(io.ui_in(2), 3, false.B)
+  //val TClk32kHzIn = RegPipeline(io.ui_in(3), 3, false.B)
+
+  // Generate 1CC pulse at 1 Hz based on selected source (tClkPulse)
+  val tClk1HzInReg = RegInit(false.B)
+  tClk1HzInReg := tClk1HzIn
+  val tClkPulse1Hz = tClk1HzIn && (!tClk1HzInReg)
+  val tClk32kHzInReg = RegInit(false.B)
+  tClk32kHzInReg := tClk32kHzIn
+  val tClkPulse32kHzEn = tClk32kHzIn && (!tClk32kHzInReg)
+
+  val tClkPulse25MHz = WireDefault(false.B)
+  val tClkPulse25MHz175 = WireDefault(false.B)
+  val tClkPulse32kHz = WireDefault(false.B)
+  val tClkPulse = WireDefault(false.B)
+
   val cntReg = RegInit(0.U(25.W))
-  cntReg := cntReg + 1.U
-  when(cntReg === (INTERNAL_1S_DIVIDER - 1).U) {
-    cntReg := 0.U
-    internal1sEn := true.B
+  val cntRegPlusOne = cntReg + 1.U
+  switch(tClkSelectIn) {
+    is(0.U) {
+      // 00: internal 25MHz
+      when(cntReg >= (25000000 - 1).U) {
+        cntReg := 0.U
+        tClkPulse25MHz := true.B
+      } .otherwise{
+        cntReg := cntRegPlusOne
+      }
+      tClkPulse := tClkPulse25MHz
+    }
+    is(1.U) {
+      // 01: internal 25.175 MHz
+      when(cntReg >= (25175000 - 1).U) {
+        cntReg := 0.U
+        tClkPulse25MHz175 := true.B
+      }.otherwise {
+        cntReg := cntRegPlusOne
+      }
+      tClkPulse := tClkPulse25MHz175
+    }
+    is(2.U) {
+      // 10: external 32768Hz
+      when(tClkPulse32kHzEn){
+        when(cntReg >= (32768 - 1).U) { //32768
+          cntReg := 0.U
+          tClkPulse32kHz := true.B
+        }.otherwise {
+          cntReg := cntRegPlusOne
+        }
+      }
+      tClkPulse := tClkPulse32kHz
+    }
+    is(3.U) {
+      // 11: external 1 Hz
+      cntReg := 0.U
+      tClkPulse := tClkPulse1Hz
+    }
   }
 
-  val external1sEn = WireDefault(false.B)
 
   val hourDecReg = RegInit(0.U(2.W)) // 0 - 2
   val hourUniReg = RegInit(0.U(4.W)) // 0 - 9
@@ -110,10 +196,8 @@ class ChiselTop() extends Module {
   val secondDecReg = RegInit(0.U(3.W)) // 0 - 5
   val secondUniReg = RegInit(0.U(4.W)) // 0 - 9
 
-  val final1sEn = WireDefault(false.B)
-  final1sEn := internal1sEn //TODO: MUX this
 
-  when(final1sEn) {
+  when(tClkPulse) {
     secondUniReg := secondUniReg + 1.U
     when(secondUniReg === 9.U) {
       secondUniReg := 0.U
@@ -224,6 +308,8 @@ class ChiselTop() extends Module {
 
   val inLine = pixelY === GE_HLINE_H_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
 
+  val inOuterEdge = pixelX === 0.U || pixelX === 639.U || pixelY === 0.U || pixelY === 479.U
+
 
   val GE_DOTS_X = 610
 
@@ -284,7 +370,7 @@ class ChiselTop() extends Module {
   val Blue = WireDefault(0.U(2.W))
 
   when(inDisplayArea) {
-    when(inEdgeV || inEdgeH || inLine || inDots){
+    when(inEdgeV || inEdgeH || inLine || inDots || inOuterEdge){
       Red := 3.U
       Green := 3.U
       Blue := 3.U
@@ -335,9 +421,9 @@ class ChiselTop() extends Module {
     Blue := 0.U
   }
 
-  RedOut := RegNext(Red)
-  GreenOut := RegNext(Green)
-  BlueOut := RegNext(Blue)
+  redOut := RegNext(Red)
+  greenOut := RegNext(Green)
+  blueOut := RegNext(Blue)
 
 
 } //module
