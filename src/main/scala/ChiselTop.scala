@@ -135,6 +135,8 @@ class ChiselTop() extends Module {
   //val TClk1HzIn = RegPipeline(io.ui_in(2), 3, false.B)
   //val TClk32kHzIn = RegPipeline(io.ui_in(3), 3, false.B)
 
+  val newDay = WireDefault(false.B)
+
   //Generate control commands
   val plusInReg = RegInit(false.B)
   plusInReg := plusIn
@@ -197,7 +199,7 @@ class ChiselTop() extends Module {
     }
     is(1.U) {
       // 01: internal 25.175 MHz
-      when(cntReg >= (25000 - 1).U) {//(25175000 - 1).U) {
+      when(cntReg >= (2500 - 1).U) {//(25175000 - 1).U) {
         cntReg := 0.U
         tClkPulse25MHz175 := true.B
       }.otherwise {
@@ -298,6 +300,7 @@ class ChiselTop() extends Module {
     }
   }.elsewhen(tClk) {
     secondUniReg := secondUniReg + 1.U
+    newDay := true.B
     when(secondUniReg === 9.U) {
       secondUniReg := 0.U
       secondDecReg := secondDecReg + 1.U
@@ -316,12 +319,40 @@ class ChiselTop() extends Module {
             }.elsewhen(hourUniReg === 3.U && hourDecReg === 2.U) {
               hourUniReg := 0.U
               hourDecReg := 0.U
+              //newDay := true.B
             }
           }
         }
       }
     }
   }
+
+  ////////////////////////////////////
+  // LFSR - 6-bit Fibonacci modified Linear Feedback Shift Register (LFSR)
+  ////////////////////////////////////
+  val lfsrReg = RegInit(VecInit(Seq.fill(18)(false.B)))
+  val lfsrEn = newDay ||
+               lfsrReg.asUInt(5,0) === 0.U ||
+               lfsrReg.asUInt(5,0) === 63.U ||
+               lfsrReg.asUInt(11,6) === 0.U ||
+               lfsrReg.asUInt(11,6) === 63.U ||
+               lfsrReg.asUInt(17,12) === 0.U ||
+               lfsrReg.asUInt(17,12) === 63.U ||
+               lfsrReg.asUInt(5,0) === lfsrReg.asUInt(11,6) ||
+               lfsrReg.asUInt(5,0) === lfsrReg.asUInt(17,12) ||
+               lfsrReg.asUInt(11,6) === lfsrReg.asUInt(17,12)
+
+  when(lfsrEn){
+    for (i <- 1 until 18) {
+      lfsrReg(i) := lfsrReg(i - 1)
+    }
+    when(lfsrReg.asUInt === 0.U) {
+      lfsrReg(0) := true.B
+    } otherwise{
+      lfsrReg(0) := lfsrReg(17) ^ lfsrReg(10)
+    }
+  }
+
 
   ////////////////////////////////////
   // GRAPHIC ENGINE
@@ -481,9 +512,9 @@ class ChiselTop() extends Module {
       (hourUniReg(1) && inHourUniXArea && inB1YArea) ||
       (hourUniReg(0) && inHourUniXArea && inB0YArea)
     ) {
-      Red := 3.U
-      Green := 0.U
-      Blue := 0.U
+      Red := lfsrReg.asUInt(1,0)
+      Green := lfsrReg.asUInt(3,2)
+      Blue := lfsrReg.asUInt(5,4)
     } .elsewhen(
       (minuteDecReg(2) && inMinuteDecXArea && inB2YArea) ||
       (minuteDecReg(1) && inMinuteDecXArea && inB1YArea) ||
@@ -493,9 +524,9 @@ class ChiselTop() extends Module {
       (minuteUniReg(1) && inMinuteUniXArea && inB1YArea) ||
       (minuteUniReg(0) && inMinuteUniXArea && inB0YArea)
     ) {
-      Red := 0.U
-      Green := 3.U
-      Blue := 0.U
+      Red := lfsrReg.asUInt(7, 6)
+      Green := lfsrReg.asUInt(9, 8)
+      Blue := lfsrReg.asUInt(11, 10)
     } .elsewhen(
       (secondDecReg(2) && inSecondDecXArea && inB2YArea) ||
       (secondDecReg(1) && inSecondDecXArea && inB1YArea) ||
@@ -505,9 +536,9 @@ class ChiselTop() extends Module {
       (secondUniReg(1) && inSecondUniXArea && inB1YArea) ||
       (secondUniReg(0) && inSecondUniXArea && inB0YArea)
     ) {
-      Red := 0.U
-      Green := 0.U
-      Blue := 3.U
+      Red := lfsrReg.asUInt(13, 12)
+      Green := lfsrReg.asUInt(15, 14)
+      Blue := lfsrReg.asUInt(17, 16)
     }.otherwise {
       Red := 0.U
       Green := 0.U
