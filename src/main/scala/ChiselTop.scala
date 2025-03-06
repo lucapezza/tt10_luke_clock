@@ -10,10 +10,6 @@ class ChiselTop() extends Module {
     val uio_oe = Output(UInt(8.W))    // IOs: Enable path (active high: 0=input, 1=output)
   })
 
-  // drive bi-directionals outputs path to zero
-  io.uio_out := 0.U
-  // use bi-directionals as input
-  io.uio_oe := 0.U
 
   val redOut = WireDefault(0.U(2.W))
   val greenOut = WireDefault(0.U(2.W))
@@ -51,17 +47,18 @@ class ChiselTop() extends Module {
   //io.ui_in(3) // Input with 32768Hz frequency
   //io.ui_in(4) // Increase hours (button)
   //io.ui_in(5) // Decrease hours (button)
-  //io.ui_in(6) // Select to increase hours (1) or minutes (0) (switch)
-  //io.ui_in(7) // Clear seconds
-
+  //io.ui_in(7) ## io.ui_in(6) // Select set mode
+                               // 00: clear seconds
+                               // 01: set minutes
+                               // 10: set hours
+                               // 11: switch layout/colour
   // Synchronizers
   val tClkSelectInBounce = RegPipeline(VecInit(io.ui_in(0), io.ui_in(1)).asUInt, 2, 0.U(2.W))
   val tClk1HzIn = RegPipeline(io.ui_in(2), 2, false.B)
   val tClk32kHzIn = RegPipeline(io.ui_in(3), 2, false.B)
   val plusInBounce = RegPipeline(io.ui_in(4), 2, false.B)
   val minusInBounce = RegPipeline(io.ui_in(5), 2, false.B)
-  val hourMinuteSetSelInBounce = RegPipeline(io.ui_in(6), 2, false.B)
-  val secondsClearInBounce = RegPipeline(io.ui_in(7), 2, false.B)
+  val setSelInBounce = RegPipeline(VecInit(io.ui_in(6), io.ui_in(7)).asUInt, 2, 0.U(2.W))
 
   // De-bouncers
   val CLOCK_FREQUENCY_HZ = 25000000 //25 MHz (for devouncing, still OK if 25.175)
@@ -80,13 +77,11 @@ class ChiselTop() extends Module {
   val tClkSelectIn = RegEnable(tClkSelectInBounce, 0.U(2.W), debounceSampleEn)
   val plusIn = RegEnable(plusInBounce, false.B, debounceSampleEn)
   val minusIn = RegEnable(minusInBounce, false.B, debounceSampleEn)
-  val hourMinuteSetSelIn = RegEnable(hourMinuteSetSelInBounce, false.B, debounceSampleEn)
-  val secondsClearIn = RegEnable(secondsClearInBounce, false.B, debounceSampleEn)
+  val SetSelIn = RegEnable(setSelInBounce, 0.U(2.W), debounceSampleEn)
 
   ////////////////////////////////////
   //VGA CONTROLLER
   ////////////////////////////////////
-
   //VGA parameters
   val VGA_H_DISPLAY_SIZE = 640
   val VGA_V_DISPLAY_SIZE = 480
@@ -100,18 +95,16 @@ class ChiselTop() extends Module {
   val counterXReg = RegInit(0.U(10.W))
   val counterYReg = RegInit(0.U(10.W))
 
-  val run = WireDefault(true.B)
-  when(run) {
-      when(counterXReg === (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE + VGA_H_SYNC_PULSE_SIZE + VGA_H_BACK_PORCH_SIZE - 1).U) { // CounterXMax = 800.U // 640 + 16 +  96 + 48
-        counterXReg := 0.U
-        when(counterYReg === (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE + VGA_V_SYNC_PULSE_SIZE + VGA_V_BACK_PORCH_SIZE - 1).U) { // CounterYMax = 525.U // 480 + 10 + 2 + 33
-          counterYReg := 0.U
-        }.otherwise {
-          counterYReg := counterYReg + 1.U
-        }
-      }.otherwise {
-        counterXReg := counterXReg + 1.U
-      }
+
+  when(counterXReg === (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE + VGA_H_SYNC_PULSE_SIZE + VGA_H_BACK_PORCH_SIZE - 1).U) { // CounterXMax = 800.U // 640 + 16 +  96 + 48
+    counterXReg := 0.U
+    when(counterYReg === (VGA_V_DISPLAY_SIZE + VGA_V_FRONT_PORCH_SIZE + VGA_V_SYNC_PULSE_SIZE + VGA_V_BACK_PORCH_SIZE - 1).U) { // CounterYMax = 525.U // 480 + 10 + 2 + 33
+      counterYReg := 0.U
+    }.otherwise {
+      counterYReg := counterYReg + 1.U
+    }
+  }.otherwise {
+    counterXReg := counterXReg + 1.U
   }
 
   val hSync = (counterXReg >= (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE).U && (counterXReg < (VGA_H_DISPLAY_SIZE + VGA_H_FRONT_PORCH_SIZE + VGA_H_SYNC_PULSE_SIZE).U)) // active for 96 cycles of the CounterX
@@ -131,10 +124,6 @@ class ChiselTop() extends Module {
   ////////////////////////////////////
   // CLOCK
   ////////////////////////////////////
-  //val TClkSelectIn = RegPipeline(io.ui_in(1) ## io.ui_in(0), 3, false.B)
-  //val TClk1HzIn = RegPipeline(io.ui_in(2), 3, false.B)
-  //val TClk32kHzIn = RegPipeline(io.ui_in(3), 3, false.B)
-
   val newDay = WireDefault(false.B)
 
   //Generate control commands
@@ -158,17 +147,6 @@ class ChiselTop() extends Module {
   }.elsewhen(minusReqReg && newFrame) {
     minus := true.B
     minusReqReg := false.B
-  }
-
-  val secondsClearInReg = RegInit(false.B)
-  secondsClearInReg := secondsClearIn
-  val secondsClearReqReg = RegInit(false.B)
-  val secondsClear = WireDefault(false.B)
-  when(secondsClearIn && (!secondsClearInReg)) {
-    secondsClearReqReg := true.B
-  }.elsewhen(secondsClearReqReg && newFrame) {
-    secondsClear := true.B
-    secondsClearReqReg := false.B
   }
 
   // Generate 1CC pulse at 1 Hz based on selected source (tClkPulse)
@@ -199,7 +177,7 @@ class ChiselTop() extends Module {
     }
     is(1.U) {
       // 01: internal 25.175 MHz
-      when(cntReg >= (2500 - 1).U) {//(25175000 - 1).U) {
+      when(cntReg >= (25175000 - 1).U) {//(25175000 - 1).U) {
         cntReg := 0.U
         tClkPulse25MHz175 := true.B
       }.otherwise {
@@ -244,12 +222,8 @@ class ChiselTop() extends Module {
   val secondDecReg = RegInit(0.U(3.W)) // 0 - 5
   val secondUniReg = RegInit(0.U(4.W)) // 0 - 9
 
-  when(secondsClear){
-    // set seconds
-    secondUniReg := 0.U
-    secondDecReg := 0.U
-  }.elsewhen(plus){
-    when(hourMinuteSetSelIn){
+  when(plus){
+    when(SetSelIn === 2.U){
       //set hours
       hourUniReg := hourUniReg + 1.U
       when(hourUniReg === 9.U && (hourDecReg === 0.U || hourDecReg === 1.U)) {
@@ -259,7 +233,7 @@ class ChiselTop() extends Module {
         hourUniReg := 3.U
         hourDecReg := 2.U
       }
-    }.otherwise{
+    }.elsewhen(SetSelIn === 1.U){
       //set minutes
       minuteUniReg := minuteUniReg + 1.U
       when(minuteUniReg === 9.U && minuteDecReg =/= 5.U) {
@@ -269,10 +243,14 @@ class ChiselTop() extends Module {
         minuteUniReg := 9.U
         minuteDecReg := 5.U
       }
+    }.elsewhen(SetSelIn === 0.U){
+      // set seconds
+      secondUniReg := 0.U
+      secondDecReg := 0.U
     }
 
   }.elsewhen(minus){
-    when(hourMinuteSetSelIn) {
+    when(SetSelIn === 2.U){
       //set hours
       when(hourUniReg === 0.U && hourDecReg === 0.U) {
         hourUniReg := 0.U
@@ -285,7 +263,7 @@ class ChiselTop() extends Module {
         }
       }
 
-    }.otherwise {
+    }.elsewhen(SetSelIn === 1.U){
       //set minutes
       when(minuteUniReg === 0.U && minuteDecReg === 0.U) {
         minuteUniReg := 0.U
@@ -297,7 +275,12 @@ class ChiselTop() extends Module {
           minuteDecReg := minuteDecReg - 1.U
         }
       }
+    }.elsewhen(SetSelIn === 0.U) {
+      // set seconds
+      secondUniReg := 0.U
+      secondDecReg := 0.U
     }
+
   }.elsewhen(tClk) {
     secondUniReg := secondUniReg + 1.U
     //newDay := true.B
@@ -332,6 +315,7 @@ class ChiselTop() extends Module {
   ////////////////////////////////////
   val lfsrReg = RegInit(VecInit(Seq.fill(18)(false.B)))
   val lfsrEn = newDay ||
+               (SetSelIn === 3.U && minus) ||
                lfsrReg.asUInt(5,0) === 0.U ||
                lfsrReg.asUInt(5,0) === 63.U ||
                lfsrReg.asUInt(11,6) === 0.U ||
@@ -357,7 +341,6 @@ class ChiselTop() extends Module {
   ////////////////////////////////////
   // GRAPHIC ENGINE
   ////////////////////////////////////
-
   val GE_HOUR_DEC_X_MIN = 10
   val GE_HOUR_DEC_X_MAX = 10 + 92
   val GE_HOUR_UNI_X_MIN = 10 + 92 + 8
@@ -380,9 +363,6 @@ class ChiselTop() extends Module {
   val GE_B0_Y_MIN = 43 + 92 + 8 + 92 + 8 + 92 + 8
   val GE_B0_Y_MAX = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92
 
-  //val GE_VLINE_H_M_X = 205
-  //val GE_VLINE_M_S_X = 405
-  //val GE_HLINE_H_M_S_Y = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92 + 8
   val GE_HLINE_M_S_Y = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92 + 9
   val GE_HLINE_S_Y = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92 + 9 + 9
 
@@ -435,10 +415,6 @@ class ChiselTop() extends Module {
     ((inMinuteDecXArea || inSecondDecXArea) && inYEdge_C3_C1) ||
     ((inHourUniXArea || inMinuteUniXArea || inSecondUniXArea) && inYEdge_C4_C2_C0)
 
-  //val inLine = ((pixelY > GE_B3_Y_MIN.U && pixelY < GE_B0_Y_MAX.U) && (pixelX === GE_VLINE_H_M_X.U || pixelX === GE_VLINE_M_S_X.U)) ||
-  //             pixelY===GE_HLINE_H_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
-
-  //val inLineMS = pixelY === GE_HLINE_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
   val inLineMS = pixelY === GE_HLINE_M_S_Y.U && ((pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
   val inLineS = pixelY === GE_HLINE_S_Y.U && (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U)
 
@@ -474,8 +450,8 @@ class ChiselTop() extends Module {
   val GE_DOTS_12_Y_MAX = 43 + 92 + 8 + 92
 
   val GE_DOTS_13_Y_MIN = 43 + 92 + 8 + 92 + 8
-  val GE_DOTS_13_Y_MAX = 43 + 92 + 8 + 92 + 8 + 48
-  val GE_DOTS_14_Y_MIN = 43 + 92 + 8 + 92 + 8 + 48 + 4
+  val GE_DOTS_13_Y_MAX = 43 + 92 + 8 + 92 + 8 + 44
+  val GE_DOTS_14_Y_MIN = 43 + 92 + 8 + 92 + 8 + 44 + 4
   val GE_DOTS_14_Y_MAX = 43 + 92 + 8 + 92 + 8 + 92
 
   val GE_DOTS_15_Y_MIN = 43 + 92 + 8 + 92 + 8 + 92 + 8
@@ -503,8 +479,30 @@ class ChiselTop() extends Module {
   val Green = WireDefault(0.U(2.W))
   val Blue = WireDefault(0.U(2.W))
 
+  val modeReg = RegInit(0.U(2.W))
+  when(SetSelIn === 3.U && plus){
+      modeReg := modeReg + 1.U
+  }
+
+  val inEdge = WireDefault(false.B)
+  switch(modeReg) {
+    is(0.U) {
+      inEdge := inEdgeV || inEdgeH || inLineMS || inLineS || inDots || inOuterEdge
+    }
+    is(1.U) {
+      inEdge := inEdgeV || inEdgeH || inDots || inOuterEdge
+    }
+    is(2.U) {
+      inEdge := inEdgeV || inEdgeH || inLineMS || inLineS || inDots
+    }
+    is(3.U) {
+      inEdge := inEdgeV || inEdgeH || inDots
+    }
+  }
+
+
   when(inDisplayArea) {
-    when(inEdgeV || inEdgeH || inLineMS || inLineS || inDots || inOuterEdge){
+    when(inEdge){
       Red := 3.U
       Green := 3.U
       Blue := 3.U
@@ -558,6 +556,13 @@ class ChiselTop() extends Module {
   redOut := RegNext(Red)
   greenOut := RegNext(Green)
   blueOut := RegNext(Blue)
+
+  ////////////////////////////////////
+  // DEBUG
+  ////////////////////////////////////
+
+  io.uio_oe := "h_FF".U //Enable path (active high: 0=input, 1=output)
+  io.uio_out := modeReg ## inDisplayArea ## cntReg(3,0) ## tClk
 
 
 } //module
