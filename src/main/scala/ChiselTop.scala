@@ -300,7 +300,7 @@ class ChiselTop() extends Module {
     }
   }.elsewhen(tClk) {
     secondUniReg := secondUniReg + 1.U
-    newDay := true.B
+    //newDay := true.B
     when(secondUniReg === 9.U) {
       secondUniReg := 0.U
       secondDecReg := secondDecReg + 1.U
@@ -319,7 +319,7 @@ class ChiselTop() extends Module {
             }.elsewhen(hourUniReg === 3.U && hourDecReg === 2.U) {
               hourUniReg := 0.U
               hourDecReg := 0.U
-              //newDay := true.B
+              newDay := true.B
             }
           }
         }
@@ -359,30 +359,32 @@ class ChiselTop() extends Module {
   ////////////////////////////////////
 
   val GE_HOUR_DEC_X_MIN = 10
-  val GE_HOUR_DEC_X_MAX = 100
-  val GE_HOUR_UNI_X_MIN = 110
-  val GE_HOUR_UNI_X_MAX = 200
-  val GE_MINUTE_DEC_X_MIN = 210
-  val GE_MINUTE_DEC_X_MAX = 300
-  val GE_MINUTE_UNI_X_MIN = 310
-  val GE_MINUTE_UNI_X_MAX = 400
-  val GE_SECOND_DEC_X_MIN = 410
-  val GE_SECOND_DEC_X_MAX = 500
-  val GE_SECOND_UNI_X_MIN = 510
-  val GE_SECOND_UNI_X_MAX = 600
+  val GE_HOUR_DEC_X_MAX = 10 + 92
+  val GE_HOUR_UNI_X_MIN = 10 + 92 + 8
+  val GE_HOUR_UNI_X_MAX = 10 + 92 + 8 + 92
+  val GE_MINUTE_DEC_X_MIN = 10 + 92 + 8 + 92 + 16
+  val GE_MINUTE_DEC_X_MAX = 10 + 92 + 8 + 92 + 16 + 92
+  val GE_MINUTE_UNI_X_MIN = 10 + 92 + 8 + 92 + 16 + 92 + 8
+  val GE_MINUTE_UNI_X_MAX = 10 + 92 + 8 + 92 + 16 + 92 + 8 + 92
+  val GE_SECOND_DEC_X_MIN = 10 + 92 + 8 + 92 + 16 + 92 + 8 + 92 + 16
+  val GE_SECOND_DEC_X_MAX = 10 + 92 + 8 + 92 + 16 + 92 + 8 + 92 + 16 + 92
+  val GE_SECOND_UNI_X_MIN = 10 + 92 + 8 + 92 + 16 + 92 + 8 + 92 + 16 + 92 + 8
+  val GE_SECOND_UNI_X_MAX = 10 + 92 + 8 + 92 + 16 + 92 + 8 + 92 + 16 + 92 + 8 + 92
 
-  val GE_B3_Y_MIN = 10
-  val GE_B3_Y_MAX = 100
-  val GE_B2_Y_MIN = 110
-  val GE_B2_Y_MAX = 200
-  val GE_B1_Y_MIN = 210
-  val GE_B1_Y_MAX = 300
-  val GE_B0_Y_MIN = 310
-  val GE_B0_Y_MAX = 400
+  val GE_B3_Y_MIN = 43
+  val GE_B3_Y_MAX = 43 + 92
+  val GE_B2_Y_MIN = 43 + 92 + 8
+  val GE_B2_Y_MAX = 43 + 92 + 8 + 92
+  val GE_B1_Y_MIN = 43 + 92 + 8 + 92 + 8
+  val GE_B1_Y_MAX = 43 + 92 + 8 + 92 + 8 + 92
+  val GE_B0_Y_MIN = 43 + 92 + 8 + 92 + 8 + 92 + 8
+  val GE_B0_Y_MAX = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92
 
   //val GE_VLINE_H_M_X = 205
   //val GE_VLINE_M_S_X = 405
-  val GE_HLINE_H_M_S_Y = 405
+  //val GE_HLINE_H_M_S_Y = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92 + 8
+  val GE_HLINE_M_S_Y = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92 + 9
+  val GE_HLINE_S_Y = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92 + 9 + 9
 
 
   val inHourDecXArea = pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_DEC_X_MAX.U
@@ -436,46 +438,48 @@ class ChiselTop() extends Module {
   //val inLine = ((pixelY > GE_B3_Y_MIN.U && pixelY < GE_B0_Y_MAX.U) && (pixelX === GE_VLINE_H_M_X.U || pixelX === GE_VLINE_M_S_X.U)) ||
   //             pixelY===GE_HLINE_H_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
 
-  val inLine = pixelY === GE_HLINE_H_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
+  //val inLineMS = pixelY === GE_HLINE_M_S_Y.U && ((pixelX > GE_HOUR_DEC_X_MIN.U && pixelX < GE_HOUR_UNI_X_MAX.U) || (pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
+  val inLineMS = pixelY === GE_HLINE_M_S_Y.U && ((pixelX > GE_MINUTE_DEC_X_MIN.U && pixelX < GE_MINUTE_UNI_X_MAX.U) || (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U))
+  val inLineS = pixelY === GE_HLINE_S_Y.U && (pixelX > GE_SECOND_DEC_X_MIN.U && pixelX < GE_SECOND_UNI_X_MAX.U)
 
   val inOuterEdge = pixelX === 0.U || pixelX === 639.U || pixelY === 0.U || pixelY === 479.U
 
 
-  val GE_DOTS_X = 610
+  val GE_DOTS_X = 10 + 92 + 8 + 92 + 16 + 92 + 8 + 92 + 16 + 92 + 8 + 92 + 9
 
-  val GE_DOTS_1_Y_MIN = 10
-  val GE_DOTS_1_Y_MAX = 16
-  val GE_DOTS_2_Y_MIN = 20
-  val GE_DOTS_2_Y_MAX = 26
-  val GE_DOTS_3_Y_MIN = 30
-  val GE_DOTS_3_Y_MAX = 36
-  val GE_DOTS_4_Y_MIN = 40
-  val GE_DOTS_4_Y_MAX = 46
-  val GE_DOTS_5_Y_MIN = 50
-  val GE_DOTS_5_Y_MAX = 56
-  val GE_DOTS_6_Y_MIN = 60
-  val GE_DOTS_6_Y_MAX = 66
-  val GE_DOTS_7_Y_MIN = 70
-  val GE_DOTS_7_Y_MAX = 76
-  val GE_DOTS_8_Y_MIN = 80
-  val GE_DOTS_8_Y_MAX = 86
+  val GE_DOTS_1_Y_MIN = 43 //+ 0 * 8 + 0 * 4
+  val GE_DOTS_1_Y_MAX = 43 + 1 * 8 + 0 * 4
+  val GE_DOTS_2_Y_MIN = 43 + 1 * 8 + 1 * 4
+  val GE_DOTS_2_Y_MAX = 43 + 2 * 8 + 1 * 4
+  val GE_DOTS_3_Y_MIN = 43 + 2 * 8 + 2 * 4
+  val GE_DOTS_3_Y_MAX = 43 + 3 * 8 + 2 * 4
+  val GE_DOTS_4_Y_MIN = 43 + 3 * 8 + 3 * 4
+  val GE_DOTS_4_Y_MAX = 43 + 4 * 8 + 3 * 4
+  val GE_DOTS_5_Y_MIN = 43 + 4 * 8 + 4 * 4
+  val GE_DOTS_5_Y_MAX = 43 + 5 * 8 + 4 * 4
+  val GE_DOTS_6_Y_MIN = 43 + 5 * 8 + 5 * 4
+  val GE_DOTS_6_Y_MAX = 43 + 6 * 8 + 5 * 4
+  val GE_DOTS_7_Y_MIN = 43 + 6 * 8 + 6 * 4
+  val GE_DOTS_7_Y_MAX = 43 + 7 * 8 + 6 * 4
+  val GE_DOTS_8_Y_MIN = 43 + 7 * 8 + 7 * 4
+  val GE_DOTS_8_Y_MAX = 43 + 92 //+ 8 * 8 + 7 * 4
 
-  val GE_DOTS_9_Y_MIN = 110
-  val GE_DOTS_9_Y_MAX = 116
-  val GE_DOTS_10_Y_MIN = 120
-  val GE_DOTS_10_Y_MAX = 126
-  val GE_DOTS_11_Y_MIN = 130
-  val GE_DOTS_11_Y_MAX = 136
-  val GE_DOTS_12_Y_MIN = 140
-  val GE_DOTS_12_Y_MAX = 146
+  val GE_DOTS_9_Y_MIN = 43 + 92 + 8
+  val GE_DOTS_9_Y_MAX = 43 + 92 + 8 + 1 * 20 + 0 * 4
+  val GE_DOTS_10_Y_MIN = 43 + 92 + 8 + 1 * 20 + 1 * 4
+  val GE_DOTS_10_Y_MAX = 43 + 92 + 8 + 2 * 20 + 1 * 4
+  val GE_DOTS_11_Y_MIN = 43 + 92 + 8 + 2 * 20 + 2 * 4
+  val GE_DOTS_11_Y_MAX = 43 + 92 + 8 + 3 * 20 + 2 * 4
+  val GE_DOTS_12_Y_MIN = 43 + 92 + 8 + 3 * 20 + 3 * 4
+  val GE_DOTS_12_Y_MAX = 43 + 92 + 8 + 92
 
-  val GE_DOTS_13_Y_MIN = 210
-  val GE_DOTS_13_Y_MAX = 216
-  val GE_DOTS_14_Y_MIN = 220
-  val GE_DOTS_14_Y_MAX = 226
+  val GE_DOTS_13_Y_MIN = 43 + 92 + 8 + 92 + 8
+  val GE_DOTS_13_Y_MAX = 43 + 92 + 8 + 92 + 8 + 48
+  val GE_DOTS_14_Y_MIN = 43 + 92 + 8 + 92 + 8 + 48 + 4
+  val GE_DOTS_14_Y_MAX = 43 + 92 + 8 + 92 + 8 + 92
 
-  val GE_DOTS_15_Y_MIN = 310
-  val GE_DOTS_15_Y_MAX = 316
+  val GE_DOTS_15_Y_MIN = 43 + 92 + 8 + 92 + 8 + 92 + 8
+  val GE_DOTS_15_Y_MAX = 43 + 92 + 8 + 92 + 8 + 92 + 8 + 92
 
   val inDots =
     pixelX === GE_DOTS_X.U &&
@@ -500,7 +504,7 @@ class ChiselTop() extends Module {
   val Blue = WireDefault(0.U(2.W))
 
   when(inDisplayArea) {
-    when(inEdgeV || inEdgeH || inLine || inDots || inOuterEdge){
+    when(inEdgeV || inEdgeH || inLineMS || inLineS || inDots || inOuterEdge){
       Red := 3.U
       Green := 3.U
       Blue := 3.U
