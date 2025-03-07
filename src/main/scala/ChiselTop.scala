@@ -167,17 +167,21 @@ class ChiselTop() extends Module {
   switch(tClkSelectIn) {
     is(0.U) {
       // 00: internal 25MHz
-      when(cntReg >= (25000000 - 1).U) {
+      when(SetSelIn === 0.U && (plus || minus)) {
+        cntReg := 0.U
+      }.elsewhen(cntReg >= (25000000 - 1).U) {
         cntReg := 0.U
         tClkPulse25MHz := true.B
-      } .otherwise{
+      }.otherwise{
         cntReg := cntRegPlusOne
       }
       tClkPulse := tClkPulse25MHz
     }
     is(1.U) {
       // 01: internal 25.175 MHz
-      when(cntReg >= (25175000 - 1).U) {//(25175000 - 1).U) {
+      when(SetSelIn === 0.U && (plus || minus)) {
+        cntReg := 0.U
+      }.elsewhen(cntReg >= (25175000 - 1).U) {//(25175000 - 1).U) {
         cntReg := 0.U
         tClkPulse25MHz175 := true.B
       }.otherwise {
@@ -187,7 +191,9 @@ class ChiselTop() extends Module {
     }
     is(2.U) {
       // 10: external 32768Hz
-      when(tClkPulse32kHzEn){
+      when(SetSelIn === 0.U && (plus || minus)) {
+        cntReg := 0.U
+      }.elsewhen(tClkPulse32kHzEn){
         when(cntReg >= (32768 - 1).U) { //32768
           cntReg := 0.U
           tClkPulse32kHz := true.B
@@ -221,6 +227,7 @@ class ChiselTop() extends Module {
 
   val secondDecReg = RegInit(0.U(3.W)) // 0 - 5
   val secondUniReg = RegInit(0.U(4.W)) // 0 - 9
+
 
   when(plus){
     when(SetSelIn === 2.U){
