@@ -39,19 +39,20 @@ class ChiselTop() extends Module {
 
   // Inputs definitiona
   //io.ui_in(1) ## io.ui_in(0) // Select of the time clock source (switches)
-                               // 00: internal 25MHz
-                               // 01: internal 25.175 MHz
-                               // 10: external 32768Hz
+                               // 00: internal 25.175 MHz
+                               // 01: internal 25MHz
+                               // 10: external 32768 Hz
                                // 11: external 1 Hz
   //io.ui_in(2) // Input with 1Hz frequency
   //io.ui_in(3) // Input with 32768Hz frequency
-  //io.ui_in(4) // Increase hours (button)
-  //io.ui_in(5) // Decrease hours (button)
+  //io.ui_in(4) // Plus (button)
+  //io.ui_in(5) // Minus (button)
   //io.ui_in(7) ## io.ui_in(6) // Select set mode
-                               // 00: clear seconds
-                               // 01: set minutes
-                               // 10: set hours
-                               // 11: switch layout/colour
+                               // 00: clear seconds (plus: clear seconds, minus: clear seconds)
+                               // 01: set minutes (plus: clear increase minutes, minus: decrease minutes)
+                               // 10: set hours (plus: increase hours, minus: decrease hours)
+                               // 11: switch layout/colour (plus: change layout, minus: change colours)
+
   // Synchronizers
   val tClkSelectInBounce = RegPipeline(VecInit(io.ui_in(0), io.ui_in(1)).asUInt, 2, 0.U(2.W))
   val tClk1HzIn = RegPipeline(io.ui_in(2), 2, false.B)
@@ -166,7 +167,19 @@ class ChiselTop() extends Module {
   val cntRegPlusOne = cntReg + 1.U
   switch(tClkSelectIn) {
     is(0.U) {
-      // 00: internal 25MHz
+      // 00: internal 25.175 MHz
+      when(SetSelIn === 0.U && (plus || minus)) {
+        cntReg := 0.U
+      }.elsewhen(cntReg >= (25175000 - 1).U) { //(25175000 - 1).U) {
+        cntReg := 0.U
+        tClkPulse25MHz175 := true.B
+      }.otherwise {
+        cntReg := cntRegPlusOne
+      }
+      tClkPulse := tClkPulse25MHz175
+    }
+    is(1.U) {
+      // 01: internal 25MHz
       when(SetSelIn === 0.U && (plus || minus)) {
         cntReg := 0.U
       }.elsewhen(cntReg >= (25000000 - 1).U) {
@@ -176,18 +189,6 @@ class ChiselTop() extends Module {
         cntReg := cntRegPlusOne
       }
       tClkPulse := tClkPulse25MHz
-    }
-    is(1.U) {
-      // 01: internal 25.175 MHz
-      when(SetSelIn === 0.U && (plus || minus)) {
-        cntReg := 0.U
-      }.elsewhen(cntReg >= (25175000 - 1).U) {//(25175000 - 1).U) {
-        cntReg := 0.U
-        tClkPulse25MHz175 := true.B
-      }.otherwise {
-        cntReg := cntRegPlusOne
-      }
-      tClkPulse := tClkPulse25MHz175
     }
     is(2.U) {
       // 10: external 32768Hz
