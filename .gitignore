@@ -13,7 +13,6 @@ test/gate_level_netlist.v
 .bsp
 src/ChiselTop.fir
 src/ChiselTop.anno.json
-src/ChiselTop.v
 /target
 /project
 /fpga
